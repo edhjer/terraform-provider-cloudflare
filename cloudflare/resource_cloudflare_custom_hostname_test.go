@@ -108,6 +108,7 @@ func TestAccCloudflareCustomHostname_WithCustomOriginServer(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "zone_id", zoneID),
 					resource.TestCheckResourceAttr(resourceName, "hostname", fmt.Sprintf("%s.%s", rnd, domain)),
 					resource.TestCheckResourceAttr(resourceName, "custom_origin_server", fmt.Sprintf("origin.%s.terraform.cfapi.net", rnd)),
+					resource.TestCheckResourceAttr(resourceName, "custom_origin_sni", fmt.Sprintf("origin.%s.terraform.cfapi.net", rnd)),
 					resource.TestCheckResourceAttr(resourceName, "ssl.0.method", "txt"),
 					resource.TestCheckResourceAttrSet(resourceName, "ownership_verification.value"),
 					resource.TestCheckResourceAttrSet(resourceName, "ownership_verification.type"),
@@ -126,6 +127,7 @@ resource "cloudflare_custom_hostname" "%[2]s" {
   zone_id = "%[1]s"
   hostname = "%[2]s.%[3]s"
   custom_origin_server = "origin.%[2]s.terraform.cfapi.net"
+	custom_origin_sni = "origin.%[2]s.terraform.cfapi.net"
   ssl {
     method = "txt"
   }
@@ -197,6 +199,7 @@ func TestAccCloudflareCustomHostname_WithCustomSSLSettings(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "ssl.0.settings.0.http2", "off"),
 					resource.TestCheckResourceAttr(resourceName, "ssl.0.settings.0.min_tls_version", "1.2"),
 					resource.TestCheckResourceAttr(resourceName, "ssl.0.settings.0.ciphers.#", "2"),
+					resource.TestCheckResourceAttr(resourceName, "ssl.0.certificate_authority", "digicert"),
 					resource.TestCheckResourceAttrSet(resourceName, "ownership_verification.value"),
 					resource.TestCheckResourceAttrSet(resourceName, "ownership_verification.type"),
 					resource.TestCheckResourceAttrSet(resourceName, "ownership_verification.name"),
@@ -310,7 +313,7 @@ func TestAccCloudflareCustomHostname_WithNoSSL(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "zone_id", zoneID),
 					resource.TestCheckResourceAttr(resourceName, "hostname", fmt.Sprintf("%s.%s", rnd, domain)),
-					resource.TestCheckNoResourceAttr(resourceName, "ssl"),
+					resource.TestCheckResourceAttr(resourceName, "ssl.#", "0"),
 				),
 			},
 		},
@@ -380,8 +383,8 @@ func TestAccCloudflareCustomHostname_Import(t *testing.T) {
 				ImportStateVerifyIgnore: []string{
 					"ssl.#",
 					"ssl.0.certificate_authority",
-					"ssl.0.cname_name",
-					"ssl.0.cname_target",
+					"ssl.0.validation_records",
+					"ssl.0.validation_errors",
 					"ssl.0.custom_certificate",
 					"ssl.0.custom_key",
 					"ssl.0.method",

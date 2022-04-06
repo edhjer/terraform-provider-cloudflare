@@ -11,18 +11,18 @@ import (
 
 	"github.com/cloudflare/cloudflare-go"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"github.com/pkg/errors"
 )
 
 const (
 	accountLevelRulesetDeleteURL = "https://api.cloudflare.com/#account-rulesets-delete-account-ruleset"
 	zoneLevelRulesetDeleteURL    = "https://api.cloudflare.com/#zone-rulesets-delete-zone-ruleset"
-	duplicateRulesetError        = "failed to create ruleset %q as a similar configuration already exists. If you are migrating from the Dashboard, you will need to first manually remove it using the API (%s) before you can configure it in Terraform. Otherwise, you have hit the entitlements quota and should contact your account team."
+	duplicateRulesetError        = "failed to create ruleset %q as a similar configuration with rules already exists and overwriting will have unintended consequences. If you are migrating from the Dashboard, you will need to first remove the existing rules otherwise you can remove the existing phase yourself using the API (%s)."
 )
 
 func resourceCloudflareRuleset() *schema.Resource {
 	return &schema.Resource{
+		Schema: resourceCloudflareRulesetSchema(),
 		Create: resourceCloudflareRulesetCreate,
 		Read:   resourceCloudflareRulesetRead,
 		Update: resourceCloudflareRulesetUpdate,
@@ -30,325 +30,12 @@ func resourceCloudflareRuleset() *schema.Resource {
 		Importer: &schema.ResourceImporter{
 			State: resourceCloudflareRulesetImport,
 		},
-
-		Schema: map[string]*schema.Schema{
-			"account_id": {
-				Type:          schema.TypeString,
-				Optional:      true,
-				ConflictsWith: []string{"zone_id"},
-			},
-			"zone_id": {
-				Type:          schema.TypeString,
-				Optional:      true,
-				ConflictsWith: []string{"account_id"},
-			},
-			"name": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
-			},
-			"description": {
-				Type:     schema.TypeString,
-				Required: true,
-			},
-			"kind": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ValidateFunc: validation.StringInSlice(cloudflare.RulesetKindValues(), false),
-			},
-			"phase": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ValidateFunc: validation.StringInSlice(cloudflare.RulesetPhaseValues(), false),
-			},
-			"shareable_entitlement_name": {
-				Type:     schema.TypeString,
-				Optional: true,
-			},
-			"rules": {
-				Type:     schema.TypeList,
-				Optional: true,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"id": {
-							Type:     schema.TypeString,
-							Computed: true,
-						},
-						"version": {
-							Type:     schema.TypeString,
-							Computed: true,
-						},
-						"ref": {
-							Type:     schema.TypeString,
-							Computed: true,
-						},
-						"enabled": {
-							Type:     schema.TypeBool,
-							Optional: true,
-						},
-						"action": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							ValidateFunc: validation.StringInSlice(cloudflare.RulesetRuleActionValues(), false),
-						},
-						"expression": {
-							Type:     schema.TypeString,
-							Required: true,
-						},
-						"description": {
-							Type:     schema.TypeString,
-							Required: true,
-						},
-						"action_parameters": {
-							Type:     schema.TypeList,
-							MaxItems: 1,
-							Optional: true,
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"id": {
-										Type:     schema.TypeString,
-										Optional: true,
-									},
-									"products": {
-										Type:     schema.TypeSet,
-										Optional: true,
-										Elem: &schema.Schema{
-											Type: schema.TypeString,
-										},
-									},
-									"uri": {
-										Type:     schema.TypeList,
-										Optional: true,
-										MaxItems: 1,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"path": {
-													Type:     schema.TypeList,
-													Optional: true,
-													MaxItems: 1,
-													Elem: &schema.Resource{
-														Schema: map[string]*schema.Schema{
-															"value": {
-																Type:     schema.TypeString,
-																Optional: true,
-															},
-															"expression": {
-																Type:     schema.TypeString,
-																Optional: true,
-															},
-														},
-													},
-												},
-												"query": {
-													Type:     schema.TypeList,
-													Optional: true,
-													MaxItems: 1,
-													Elem: &schema.Resource{
-														Schema: map[string]*schema.Schema{
-															"value": {
-																Type:     schema.TypeString,
-																Optional: true,
-															},
-															"expression": {
-																Type:     schema.TypeString,
-																Optional: true,
-															},
-														},
-													},
-												},
-												"origin": {
-													Type:     schema.TypeBool,
-													Optional: true,
-												},
-											},
-										},
-									},
-									"headers": {
-										Type:     schema.TypeList,
-										Optional: true,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"name": {
-													Type:     schema.TypeString,
-													Optional: true,
-												},
-												"value": {
-													Type:     schema.TypeString,
-													Optional: true,
-												},
-												"expression": {
-													Type:     schema.TypeString,
-													Optional: true,
-												},
-												"operation": {
-													Type:     schema.TypeString,
-													Optional: true,
-												},
-											},
-										},
-									},
-									"increment": {
-										Type:     schema.TypeInt,
-										Optional: true,
-									},
-									"version": {
-										Type:     schema.TypeString,
-										Optional: true,
-										Computed: true,
-									},
-									"ruleset": {
-										Type:     schema.TypeString,
-										Optional: true,
-									},
-									"rulesets": {
-										Type:     schema.TypeSet,
-										Optional: true,
-										Elem: &schema.Schema{
-											Type: schema.TypeString,
-										},
-									},
-									"rules": {
-										Type:     schema.TypeMap,
-										Optional: true,
-										Elem: &schema.Schema{
-											Type: schema.TypeString,
-										},
-									},
-									"overrides": {
-										Type:     schema.TypeList,
-										Optional: true,
-										MaxItems: 1,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"enabled": {
-													Type:     schema.TypeBool,
-													Optional: true,
-												},
-												"action": {
-													Type:         schema.TypeString,
-													Optional:     true,
-													ValidateFunc: validation.StringInSlice(cloudflare.RulesetRuleActionValues(), false),
-												},
-												"categories": {
-													Type:     schema.TypeList,
-													Optional: true,
-													Elem: &schema.Resource{
-														Schema: map[string]*schema.Schema{
-															"category": {
-																Type:     schema.TypeString,
-																Optional: true,
-															},
-															"action": {
-																Type:         schema.TypeString,
-																Optional:     true,
-																ValidateFunc: validation.StringInSlice(cloudflare.RulesetRuleActionValues(), false),
-															},
-															"enabled": {
-																Type:     schema.TypeBool,
-																Optional: true,
-															},
-														},
-													},
-												},
-												"rules": {
-													Type:     schema.TypeList,
-													Optional: true,
-													Elem: &schema.Resource{
-														Schema: map[string]*schema.Schema{
-															"id": {
-																Type:     schema.TypeString,
-																Optional: true,
-															},
-															"action": {
-																Type:         schema.TypeString,
-																Optional:     true,
-																ValidateFunc: validation.StringInSlice(cloudflare.RulesetRuleActionValues(), false),
-															},
-															"enabled": {
-																Type:     schema.TypeBool,
-																Optional: true,
-															},
-															"score_threshold": {
-																Type:     schema.TypeInt,
-																Optional: true,
-															},
-															"sensitivity_level": {
-																Type:     schema.TypeString,
-																Optional: true,
-															},
-														},
-													},
-												},
-											},
-										},
-									},
-									"matched_data": {
-										Type:     schema.TypeList,
-										Optional: true,
-										MaxItems: 1,
-										Elem: &schema.Resource{
-											Schema: map[string]*schema.Schema{
-												"public_key": {
-													Type:     schema.TypeString,
-													Optional: true,
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-						"ratelimit": {
-							Type:     schema.TypeList,
-							Optional: true,
-							MaxItems: 1,
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"characteristics": {
-										Type:     schema.TypeSet,
-										Optional: true,
-										Elem: &schema.Schema{
-											Type: schema.TypeString,
-										},
-									},
-									"period": {
-										Type:     schema.TypeInt,
-										Optional: true,
-									},
-									"requests_per_period": {
-										Type:     schema.TypeInt,
-										Optional: true,
-									},
-									"mitigation_timeout": {
-										Type:     schema.TypeInt,
-										Optional: true,
-									},
-									"mitigation_expression": {
-										Type:     schema.TypeString,
-										Optional: true,
-									},
-								},
-							},
-						},
-						"exposed_credential_check": {
-							Type:     schema.TypeList,
-							Optional: true,
-							MaxItems: 1,
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"username_expression": {
-										Type:     schema.TypeString,
-										Optional: true,
-									},
-									"password_expression": {
-										Type:     schema.TypeString,
-										Optional: true,
-									},
-								},
-							},
-						},
-					},
-				},
+		SchemaVersion: 1,
+		StateUpgraders: []schema.StateUpgrader{
+			{
+				Type:    resourceCloudflareRulesetSchemaV0().CoreConfigSchema().ImpliedType(),
+				Upgrade: resourceCloudflareRulesetStateUpgradeV0ToV1,
+				Version: 0,
 			},
 		},
 	}
@@ -358,6 +45,23 @@ func resourceCloudflareRulesetCreate(d *schema.ResourceData, meta interface{}) e
 	client := meta.(*cloudflare.API)
 	accountID := d.Get("account_id").(string)
 	zoneID := d.Get("zone_id").(string)
+	rulesetPhase := d.Get("phase").(string)
+
+	var ruleset cloudflare.Ruleset
+	var sempahoreErr error
+	if accountID != "" {
+		ruleset, sempahoreErr = client.GetAccountRulesetPhase(context.Background(), accountID, rulesetPhase)
+	} else {
+		ruleset, sempahoreErr = client.GetZoneRulesetPhase(context.Background(), zoneID, rulesetPhase)
+	}
+
+	if len(ruleset.Rules) > 0 {
+		deleteRulesetURL := accountLevelRulesetDeleteURL
+		if accountID == "" {
+			deleteRulesetURL = zoneLevelRulesetDeleteURL
+		}
+		return fmt.Errorf(duplicateRulesetError, rulesetPhase, deleteRulesetURL)
+	}
 
 	rulesetName := d.Get("name").(string)
 	rulesetDescription := d.Get("description").(string)
@@ -366,35 +70,41 @@ func resourceCloudflareRulesetCreate(d *schema.ResourceData, meta interface{}) e
 		Name:        rulesetName,
 		Description: rulesetDescription,
 		Kind:        rulesetKind,
-		Phase:       d.Get("phase").(string),
+		Phase:       rulesetPhase,
 	}
 
 	rules, err := buildRulesetRulesFromResource(d)
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("error building ruleset from resource"))
+		return fmt.Errorf("error building ruleset rules from resource: %w", err)
 	}
 
 	if len(rules) > 0 {
 		rs.Rules = rules
 	}
 
-	var ruleset cloudflare.Ruleset
-	if accountID != "" {
-		ruleset, err = client.CreateAccountRuleset(context.Background(), accountID, rs)
-	} else {
-		ruleset, err = client.CreateZoneRuleset(context.Background(), zoneID, rs)
-	}
-
-	if err != nil {
-		if strings.Contains(err.Error(), "exceeded maximum number") {
-			deleteRulesetURL := accountLevelRulesetDeleteURL
-			if accountID == "" {
-				deleteRulesetURL = zoneLevelRulesetDeleteURL
-			}
-			return fmt.Errorf(duplicateRulesetError, rulesetName, deleteRulesetURL)
+	if sempahoreErr == nil && len(ruleset.Rules) == 0 && ruleset.Description == "" {
+		log.Print("[DEBUG] default ruleset created by the UI with empty rules found, recreating from scratch")
+		var deleteRulesetErr error
+		if accountID != "" {
+			deleteRulesetErr = client.DeleteAccountRuleset(context.Background(), accountID, ruleset.ID)
+		} else {
+			deleteRulesetErr = client.DeleteZoneRuleset(context.Background(), zoneID, ruleset.ID)
 		}
 
-		return errors.Wrap(err, fmt.Sprintf("error creating ruleset %s", rulesetName))
+		if deleteRulesetErr != nil {
+			return fmt.Errorf("failed to delete ruleset: %w", deleteRulesetErr)
+		}
+	}
+
+	var rulesetCreateErr error
+	if accountID != "" {
+		ruleset, rulesetCreateErr = client.CreateAccountRuleset(context.Background(), accountID, rs)
+	} else {
+		ruleset, rulesetCreateErr = client.CreateZoneRuleset(context.Background(), zoneID, rs)
+	}
+
+	if rulesetCreateErr != nil {
+		return fmt.Errorf("error creating ruleset %s: %w", rulesetName, rulesetCreateErr)
 	}
 
 	rulesetEntryPoint := cloudflare.Ruleset{
@@ -406,13 +116,13 @@ func resourceCloudflareRulesetCreate(d *schema.ResourceData, meta interface{}) e
 	// endpoint.
 	if rulesetKind != string(cloudflare.RulesetKindCustom) {
 		if accountID != "" {
-			_, err = client.UpdateAccountRulesetPhase(context.Background(), accountID, rs.Phase, rulesetEntryPoint)
+			_, err = client.UpdateAccountRulesetPhase(context.Background(), accountID, rulesetPhase, rulesetEntryPoint)
 		} else {
-			_, err = client.UpdateZoneRulesetPhase(context.Background(), zoneID, rs.Phase, rulesetEntryPoint)
+			_, err = client.UpdateZoneRulesetPhase(context.Background(), zoneID, rulesetPhase, rulesetEntryPoint)
 		}
 
 		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("error updating ruleset phase entrypoint %s", rulesetName))
+			return fmt.Errorf("error updating ruleset phase entrypoint %s: %w", rulesetName, err)
 		}
 	}
 
@@ -445,7 +155,7 @@ func resourceCloudflareRulesetRead(d *schema.ResourceData, meta interface{}) err
 			d.SetId("")
 			return nil
 		}
-		return errors.Wrap(err, fmt.Sprintf("error reading ruleset ID: %s", d.Id()))
+		return fmt.Errorf("error reading ruleset ID %q: %w", d.Id(), err)
 	}
 
 	d.Set("name", ruleset.Name)
@@ -465,7 +175,7 @@ func resourceCloudflareRulesetUpdate(d *schema.ResourceData, meta interface{}) e
 
 	rules, err := buildRulesetRulesFromResource(d)
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("error building ruleset from resource"))
+		return fmt.Errorf("error building ruleset from resource: %w", err)
 	}
 
 	description := d.Get("description").(string)
@@ -476,7 +186,7 @@ func resourceCloudflareRulesetUpdate(d *schema.ResourceData, meta interface{}) e
 	}
 
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("error updating ruleset with ID %q", d.Id()))
+		return fmt.Errorf("error updating ruleset with ID %q: %w", d.Id(), err)
 	}
 
 	return resourceCloudflareRulesetRead(d, meta)
@@ -495,7 +205,7 @@ func resourceCloudflareRulesetDelete(d *schema.ResourceData, meta interface{}) e
 	}
 
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("error deleting ruleset with ID %q", d.Id()))
+		return fmt.Errorf("error deleting ruleset with ID %q: %w", d.Id(), err)
 	}
 
 	return nil
@@ -518,13 +228,16 @@ func buildStateFromRulesetRules(rules []cloudflare.RulesetRule) interface{} {
 		}
 
 		if !reflect.ValueOf(r.ActionParameters).IsNil() {
-			var actionParameters []map[string]interface{}
-			var overrides []map[string]interface{}
-			var idBasedOverrides []map[string]interface{}
-			var categoryBasedOverrides []map[string]interface{}
-			var headers []map[string]interface{}
-			var uri []map[string]interface{}
-			var matchedData []map[string]interface{}
+			var (
+				actionParameters       []map[string]interface{}
+				overrides              []map[string]interface{}
+				idBasedOverrides       []map[string]interface{}
+				categoryBasedOverrides []map[string]interface{}
+				headers                []map[string]interface{}
+				uri                    []map[string]interface{}
+				matchedData            []map[string]interface{}
+				response               []map[string]interface{}
+			)
 			actionParameterRules := make(map[string]string)
 
 			if !reflect.ValueOf(r.ActionParameters.Overrides).IsNil() {
@@ -612,17 +325,27 @@ func buildStateFromRulesetRules(rules []cloudflare.RulesetRule) interface{} {
 				}
 			}
 
+			if !reflect.ValueOf(r.ActionParameters.Response).IsNil() {
+				response = append(response, map[string]interface{}{
+					"status_code":  r.ActionParameters.Response.StatusCode,
+					"content_type": r.ActionParameters.Response.ContentType,
+					"content":      r.ActionParameters.Response.Content,
+				})
+			}
+
 			actionParameters = append(actionParameters, map[string]interface{}{
 				"id":           r.ActionParameters.ID,
 				"increment":    r.ActionParameters.Increment,
 				"headers":      headers,
 				"overrides":    overrides,
 				"products":     r.ActionParameters.Products,
+				"phases":       r.ActionParameters.Phases,
 				"ruleset":      r.ActionParameters.Ruleset,
 				"rulesets":     r.ActionParameters.Rulesets,
 				"rules":        actionParameterRules,
 				"uri":          uri,
 				"matched_data": matchedData,
+				"response":     response,
 				"version":      r.ActionParameters.Version,
 			})
 
@@ -637,6 +360,8 @@ func buildStateFromRulesetRules(rules []cloudflare.RulesetRule) interface{} {
 				"period":              r.RateLimit.Period,
 				"requests_per_period": r.RateLimit.RequestsPerPeriod,
 				"mitigation_timeout":  r.RateLimit.MitigationTimeout,
+				"counting_expression": r.RateLimit.CountingExpression,
+				"requests_to_origin":  r.RateLimit.RequestsToOrigin,
 			})
 
 			rule["ratelimit"] = rateLimit
@@ -684,7 +409,27 @@ func buildRulesetRulesFromResource(d *schema.ResourceData) ([]cloudflare.Ruleset
 					case "id":
 						rule.ActionParameters.ID = pValue.(string)
 					case "version":
-						rule.ActionParameters.Version = pValue.(string)
+						if rule.ActionParameters.Version != "" {
+							rule.ActionParameters.Version = pValue.(string)
+						}
+					case "products":
+						var products []string
+						for _, product := range pValue.(*schema.Set).List() {
+							products = append(products, product.(string))
+						}
+
+						if len(products) > 0 {
+							rule.ActionParameters.Products = products
+						}
+					case "phases":
+						var phases []string
+						for _, phase := range pValue.(*schema.Set).List() {
+							phases = append(phases, phase.(string))
+						}
+
+						if len(phases) > 0 {
+							rule.ActionParameters.Phases = phases
+						}
 					case "ruleset":
 						rule.ActionParameters.Ruleset = pValue.(string)
 					case "rulesets":
@@ -717,8 +462,9 @@ func buildRulesetRulesFromResource(d *schema.ResourceData) ([]cloudflare.Ruleset
 						var rules []cloudflare.RulesetRuleActionParametersRules
 
 						for overrideCounter, overrideParamValue := range pValue.([]interface{}) {
+							//nolint:staticcheck
 							if value, ok := d.GetOkExists(fmt.Sprintf("rules.%d.action_parameters.0.overrides.%d.enabled", rulesCounter, overrideCounter)); ok {
-								overrideConfiguration.Enabled = &[]bool{value.(bool)}[0]
+								overrideConfiguration.Enabled = cloudflare.BoolPtr(value.(bool))
 							}
 
 							if val, ok := overrideParamValue.(map[string]interface{})["action"]; ok {
@@ -732,7 +478,7 @@ func buildRulesetRulesFromResource(d *schema.ResourceData) ([]cloudflare.Ruleset
 									categories = append(categories, cloudflare.RulesetRuleActionParametersCategories{
 										Category: cData["category"].(string),
 										Action:   cData["action"].(string),
-										Enabled:  cData["enabled"].(bool),
+										Enabled:  cloudflare.BoolPtr(cData["enabled"].(bool)),
 									})
 								}
 							}
@@ -743,8 +489,9 @@ func buildRulesetRulesFromResource(d *schema.ResourceData) ([]cloudflare.Ruleset
 									rData := rule.(map[string]interface{})
 
 									var enabled *bool
-									if value, ok := d.GetOk(fmt.Sprintf("rules.%d.action_parameters.0.overrides.%d.rules.%d.enabled", rulesCounter, overrideCounter, ruleOverrideCounter)); ok {
-										enabled = &[]bool{value.(bool)}[0]
+									//nolint:staticcheck
+									if value, ok := d.GetOkExists(fmt.Sprintf("rules.%d.action_parameters.0.overrides.%d.rules.%d.enabled", rulesCounter, overrideCounter, ruleOverrideCounter)); ok {
+										enabled = cloudflare.BoolPtr(value.(bool))
 									}
 
 									rules = append(rules, cloudflare.RulesetRuleActionParametersRules{
@@ -771,6 +518,15 @@ func buildRulesetRulesFromResource(d *schema.ResourceData) ([]cloudflare.Ruleset
 						for i := range pValue.([]interface{}) {
 							rule.ActionParameters.MatchedData = &cloudflare.RulesetRuleActionParametersMatchedData{
 								PublicKey: pValue.([]interface{})[i].(map[string]interface{})["public_key"].(string),
+							}
+						}
+
+					case "response":
+						for i := range pValue.([]interface{}) {
+							rule.ActionParameters.Response = &cloudflare.RulesetRuleActionParametersBlockResponse{
+								StatusCode:  uint16(pValue.([]interface{})[i].(map[string]interface{})["status_code"].(int)),
+								ContentType: pValue.([]interface{})[i].(map[string]interface{})["content_type"].(string),
+								Content:     pValue.([]interface{})[i].(map[string]interface{})["content"].(string),
 							}
 						}
 
@@ -834,8 +590,10 @@ func buildRulesetRulesFromResource(d *schema.ResourceData) ([]cloudflare.Ruleset
 						rule.RateLimit.RequestsPerPeriod = pValue.(int)
 					case "mitigation_timeout":
 						rule.RateLimit.MitigationTimeout = pValue.(int)
-					case "mitigation_expression":
-						rule.RateLimit.MitigationExpression = pValue.(string)
+					case "counting_expression":
+						rule.RateLimit.CountingExpression = pValue.(string)
+					case "requests_to_origin":
+						rule.RateLimit.RequestsToOrigin = pValue.(bool)
 
 					default:
 						log.Printf("[DEBUG] unknown key encountered in buildRulesetRulesFromResource for ratelimit: %s", pKey)

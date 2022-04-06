@@ -14,34 +14,12 @@ const argoTunnelCNAME = "cfargotunnel.com"
 
 func resourceCloudflareArgoTunnel() *schema.Resource {
 	return &schema.Resource{
+		Schema: resourceCloudflareArgoTunnelSchema(),
 		Create: resourceCloudflareArgoTunnelCreate,
 		Read:   resourceCloudflareArgoTunnelRead,
 		Delete: resourceCloudflareArgoTunnelDelete,
 		Importer: &schema.ResourceImporter{
 			State: resourceCloudflareArgoTunnelImport,
-		},
-
-		Schema: map[string]*schema.Schema{
-			"account_id": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
-			},
-			"name": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
-			},
-			"secret": {
-				Type:      schema.TypeString,
-				Required:  true,
-				Sensitive: true,
-				ForceNew:  true,
-			},
-			"cname": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
 		},
 	}
 }
@@ -110,6 +88,7 @@ func resourceCloudflareArgoTunnelImport(d *schema.ResourceData, meta interface{}
 		return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch Argo Tunnel %s", tunnelID))
 	}
 
+	d.Set("account_id", accID)
 	d.Set("name", tunnel.Name)
 	d.SetId(tunnel.ID)
 
